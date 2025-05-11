@@ -1,0 +1,5 @@
+Understanding Earth's changing climate requires careful analysis of temperature records spanning many decades. The Berkeley Earth Surface Temperature Study has created a comprehensive global temperature dataset by combining millions of temperature measurements from both land and ocean sources. Their dataset begins in 1850 and continues to the present day, providing one of the longest continuous records of Earth's surface temperature.
+
+Rather than using raw temperature measurements, Berkeley Earth reports temperature "anomalies" - differences from a baseline period (1951-1980). For example, if a location typically averages 20°C in July during the baseline period, and measures 22°C in July 2020, this would be recorded as a +2°C anomaly.  This approach allows scientists to track how temperatures have changed over time relative to this baseline period.
+
+Investigate Berkeley Earth's historical temperature data and produce a comprehensive analytical report that demonstrates your ability to work with real-world datasets. Examine data quality, analyze long-term temperature trends, and investigate monthly patterns in global temperatures.
