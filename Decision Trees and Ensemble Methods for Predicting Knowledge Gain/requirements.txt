@@ -1,0 +1,22 @@
+Goals
+- To understand the relationship between web search behavior and knowledge gain through exploratory data analysis
+- To implement a decision tree classifier from scratch to predict knowledge gain
+- To apply ensemble methods (Random Forest and Boosting) to improve prediction performance
+- To analyze and compare the performance of different models
+
+Background
+
+- The SAL-Lightning dataset contains features extracted from web pages visited by users during learning tasks, along with measurements of their knowledge gain.
+
+Dataset Details
+- The SAL-Lightning dataset was collected during a study where 104 participants were asked to learn about the formation of thunder and lightning through web searches. The target variable is kg_mc, which represents the knowledge gain measured by the difference between post-test and pre-test multiple-choice scores.
+
+For modeling purposes, we can convert this continuous knowledge gain variable into three classes:
+- Low Knowledge Gain: Participants whose knowledge gain is below -0.5 standard deviations from the mean
+- Moderate Knowledge Gain: Participants whose knowledge gain is between -0.5 and 0.5 standard deviations from the mean
+- High Knowledge Gain: Participants whose knowledge gain is above 0.5 standard deviations from the mean
+
+The dataset includes several types of features:
+1. Participant Information: Demographics and cognitive abilities
+2. Web Search Behavior: Session duration, pages visited, interactions
+3. Derived Metrics: Calculated values based on other features
