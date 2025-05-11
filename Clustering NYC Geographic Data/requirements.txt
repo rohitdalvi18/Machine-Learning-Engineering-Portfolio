@@ -1,0 +1,4 @@
+- Implement the k-Means algorithm
+- Conduct performance analysis comparing your implementation against scikit-learn’s version
+- Apply and evaluate different clustering algorithms on the provided datasets
+- Extend k-Means to support balanced cluster sizes
