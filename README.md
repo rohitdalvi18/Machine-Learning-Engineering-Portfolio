@@ -14,21 +14,21 @@ This repository contains implementations of machine learning algorithms, techniq
 - **Natural Language Processing:** Sentiment Analysis, Text Classification
 
 ## Libraries & Frameworks
-- Scikit-learn
+- [Scikit-learn](https://scikit-learn.org/)
 
-- TensorFlow
+- [TensorFlow](https://www.tensorflow.org/)
 
-- Keras
+- [Keras](https://keras.io/)
 
-- PyTorch
+- [PyTorch](https://pytorch.org/)
 
-- Pandas
+- [Pandas](https://pandas.pydata.org/)
 
-- NumPy
+- [NumPy](https://numpy.org/)
 
-- Matplotlib
+- [Matplotlib](https://matplotlib.org/)
 
-- Seaborn
+- [Seaborn](https://seaborn.pydata.org/)
 
 ## Implementation Details
 Each project directory contains:
