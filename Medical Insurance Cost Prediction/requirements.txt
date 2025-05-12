@@ -1,0 +1,30 @@
+Tasks
+
+Task 1
+Before training a regression model, it's essential to analyze and preprocess the data to ensure that it's suitable for analysis and modeling. This step involves handling missing values, converting categorical variables into numerical representations, and performing feature engineering to extract useful information from the existing features.
+
+Task 2
+Develop the best regression model for predicting medical insurance costs using the provided training dataset.
+
+Task 3
+Use the provided test dataset to generate predictions using your model.
+
+Dataset and Workflow
+
+train_data.csv: Contains features for training your model (age, sex, bmi, children, smoker, region)
+train_labels.csv: Contains the target values (insurance charges) for the training data
+test_data.csv: Contains ONLY features for testing your model (NO labels provided)
+
+Use train_data.csv and train_labels.csv to develop, train, and validate your model. Since you don't have the actual test labels, you should use validation techniques (like cross-validation) on your training data to estimate how well your model will perform on unseen data.
+
+After finalizing your model, you'll use it to make predictions on test_data.csv. These predictions will be evaluated against the actual test labels.    
+
+Dataset Features:
+
+age: Age of the primary beneficiary (numeric)
+sex: Gender of the insurance contractor (categorical: 'male', 'female')
+bmi: Body mass index (numeric)
+children: Number of dependents covered by health insurance (numeric)
+smoker: Smoking status (categorical: 'yes', 'no')
+region: The beneficiary's residential area in the US (categorical: 'northeast', 'southeast', 'southwest', 'northwest')
+charges: Individual medical costs billed by health insurance (numeric, target variable)
