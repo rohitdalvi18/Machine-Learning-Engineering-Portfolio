@@ -1,0 +1,360 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+from sklearn.datasets import load_wine
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, ConfusionMatrixDisplay, f1_score
+from sklearn.metrics.pairwise import cosine_distances, manhattan_distances
+from sklearn.linear_model import LogisticRegression
+
+class Node:
+    """Tree node: stores feature index & threshold for splits or value for leaves."""
+    def __init__(self, feature_index=None, threshold=None, left=None, right=None, *, value=None):
+        self.feature_index = feature_index  # index of feature to split on
+        self.threshold = threshold          # threshold value for split
+        self.left = left                    # left child Node
+        self.right = right                  # right child Node
+        self.value = value                  # value if leaf (class label for classifier)
+
+class DecisionTreeClassifierScratch:
+    def __init__(self, max_depth=None, min_samples_split=2):
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.root = None
+
+    def _gini(self, y):
+        """Calculate Gini impurity for a list of class labels `y`."""
+        m = len(y)
+        if m == 0:
+            return 0.0
+        # Calculate class probabilities
+        counts = {}
+        for label in y:
+            counts[label] = counts.get(label, 0) + 1
+        impurity = 1.0
+        for count in counts.values():
+            prob = count / m
+            impurity -= prob ** 2
+        return impurity
+
+    def _best_split(self, X, y):
+        """Find the best split (feature index and threshold) for dataset X, y."""
+        n_samples, n_features = X.shape
+        parent_impurity = self._gini(y)
+        best_gain = -1e-9  # allow 0 gain splits
+        best_feat, best_thresh = None, None
+        best_mask = None
+        # Stop if node is too small to split
+        if n_samples < self.min_samples_split:
+            return None, None, None
+        # Try every feature and threshold
+        for feat_idx in range(n_features):
+            values = X[:, feat_idx]
+            unique_vals = np.unique(values)
+            if unique_vals.size <= 1:
+                continue  # no split possible (all values same)
+            # Candidate thresholds: midpoints between sorted unique values
+            thresholds = (unique_vals[:-1] + unique_vals[1:]) / 2.0
+            for thresh in thresholds:
+                # Partition data
+                left_mask = values <= thresh
+                right_mask = values > thresh
+                if left_mask.sum() == 0 or right_mask.sum() == 0:
+                    continue  # skip splits that leave one side empty
+                y_left = [y[i] for i in range(n_samples) if left_mask[i]]
+                y_right = [y[i] for i in range(n_samples) if right_mask[i]]
+                # Compute Gini impurity for children
+                left_impurity = self._gini(y_left)
+                right_impurity = self._gini(y_right)
+                # Weighted impurity (based on child sizes)
+                n_left, n_right = len(y_left), len(y_right)
+                weighted_impurity = (n_left / n_samples) * left_impurity \
+                                   + (n_right / n_samples) * right_impurity
+                gain = parent_impurity - weighted_impurity
+                if gain > best_gain:  # select split with largest impurity reduction
+                    best_gain = gain
+                    best_feat = feat_idx
+                    best_thresh = thresh
+                    best_mask = (left_mask, right_mask)
+        return best_feat, best_thresh, best_mask
+
+    def _build_tree(self, X, y, depth=0):
+        """Recursively build the tree."""
+        # Create a leaf node if stopping conditions are met
+        if len(set(y)) == 1:
+            return Node(value=y[0])  # pure node
+        if self.max_depth is not None and depth >= self.max_depth:
+            # Max depth reached: use majority class as leaf value
+            majority_class = max(set(y), key=y.count)
+            return Node(value=majority_class)
+        if len(y) < self.min_samples_split:
+            majority_class = max(set(y), key=y.count)
+            return Node(value=majority_class)
+        # Otherwise, find the best split
+        feat_idx, thresh, mask = self._best_split(X, y)
+        if feat_idx is None:
+            # No effective split found (e.g., no impurity gain)
+            majority_class = max(set(y), key=y.count)
+            return Node(value=majority_class)
+        # Recurse for left and right subsets
+        left_mask, right_mask = mask
+        left_X, right_X = X[left_mask], X[right_mask]
+        left_y = [y[i] for i in range(len(y)) if left_mask[i]]
+        right_y = [y[i] for i in range(len(y)) if right_mask[i]]
+        left_child = self._build_tree(left_X, left_y, depth+1)
+        right_child = self._build_tree(right_X, right_y, depth+1)
+        # Return internal node
+        return Node(feature_index=feat_idx, threshold=thresh, left=left_child, right=right_child)
+
+    def fit(self, X, y):
+        """Build tree from training data X (numpy array) and labels y."""
+        X = np.array(X)
+        y = list(y)
+        self.root = self._build_tree(X, y)
+
+    def _predict_one(self, x, node):
+        """Traverse the tree for a single sample x to get predicted class."""
+        if node.value is not None:
+            return node.value
+        if x[node.feature_index] <= node.threshold:
+            return self._predict_one(x, node.left)
+        else:
+            return self._predict_one(x, node.right)
+
+    def predict(self, X):
+        """Predict class labels for samples X."""
+        X = np.array(X)
+        return [self._predict_one(x, self.root) for x in X]
+
+class DecisionTreeRegressorScratch:
+    def __init__(self, max_depth=None, min_samples_split=2):
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.root = None
+
+    def _mse(self, y):
+        """Calculate mean squared error for target values list `y`."""
+        if len(y) == 0:
+            return 0.0
+        mean_y = sum(y) / len(y)
+        return sum((val - mean_y) ** 2 for val in y) / len(y)
+
+    def _best_split(self, X, y):
+        """Find best feature and threshold for reducing MSE."""
+        n_samples, n_features = X.shape
+        parent_mse = self._mse(y)
+        best_gain = -1e-9
+        best_feat, best_thresh = None, None
+        best_mask = None
+        if n_samples < self.min_samples_split:
+            return None, None, None
+        for feat_idx in range(n_features):
+            values = X[:, feat_idx]
+            unique_vals = np.unique(values)
+            if unique_vals.size <= 1:
+                continue
+            unique_vals.sort()
+            thresholds = (unique_vals[:-1] + unique_vals[1:]) / 2.0
+            for thresh in thresholds:
+                left_mask = values <= thresh
+                right_mask = values > thresh
+                if left_mask.sum() == 0 or right_mask.sum() == 0:
+                    continue
+                left_y = [y[i] for i in range(n_samples) if left_mask[i]]
+                right_y = [y[i] for i in range(n_samples) if right_mask[i]]
+                left_mse = self._mse(left_y)
+                right_mse = self._mse(right_y)
+                # Weighted average MSE after split
+                n_left, n_right = len(left_y), len(right_y)
+                weighted_mse = (n_left / n_samples) * left_mse \
+                               + (n_right / n_samples) * right_mse
+                gain = parent_mse - weighted_mse  # MSE reduction
+                if gain > best_gain:
+                    best_gain = gain
+                    best_feat = feat_idx
+                    best_thresh = thresh
+                    best_mask = (left_mask, right_mask)
+        return best_feat, best_thresh, best_mask
+
+    def _build_tree(self, X, y, depth=0):
+        if len(y) == 0:
+            return None
+        # If all targets nearly equal or max depth/min samples reached, make leaf
+        if max(y) - min(y) < 1e-9:
+            return Node(value=y[0])
+        if self.max_depth is not None and depth >= self.max_depth:
+            return Node(value=sum(y) / len(y))
+        if len(y) < self.min_samples_split:
+            return Node(value=sum(y) / len(y))
+        # Find best split
+        feat_idx, thresh, mask = self._best_split(X, y)
+        if feat_idx is None:
+            return Node(value=sum(y) / len(y))
+        left_mask, right_mask = mask
+        left_X, right_X = X[left_mask], X[right_mask]
+        left_y = [y[i] for i in range(len(y)) if left_mask[i]]
+        right_y = [y[i] for i in range(len(y)) if right_mask[i]]
+        left_child = self._build_tree(left_X, left_y, depth+1)
+        right_child = self._build_tree(right_X, right_y, depth+1)
+        return Node(feature_index=feat_idx, threshold=thresh, left=left_child, right=right_child)
+
+    def fit(self, X, y):
+        X = np.array(X); y = list(y)
+        self.root = self._build_tree(X, y)
+
+    def _predict_one(self, x, node):
+        if node.value is not None:
+            return node.value
+        if x[node.feature_index] <= node.threshold:
+            return self._predict_one(x, node.left)
+        else:
+            return self._predict_one(x, node.right)
+
+    def predict(self, X):
+        X = np.array(X)
+        return [self._predict_one(x, self.root) for x in X]
+
+# Toy XOR dataset
+X_xor = [[0,0],[0,1],[1,0],[1,1]]
+y_xor = [0, 1, 1, 0]
+clf_scratch = DecisionTreeClassifierScratch()
+clf_scratch.fit(X_xor, y_xor)
+print("Our model XOR predictions:", clf_scratch.predict(X_xor))
+
+# Compare with sklearn's DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier
+clf_sk = DecisionTreeClassifier(criterion="gini", random_state=0).fit(X_xor, y_xor)
+print("Sklearn model XOR predictions:", clf_sk.predict(X_xor))
+
+X = [[i] for i in range(11)]               # X = 0,1,...,10
+y = [10 if x<4 else 20 if x<7 else 15 for x in range(11)]
+reg_scratch = DecisionTreeRegressorScratch()
+reg_scratch.fit(X, y)
+print(reg_scratch.predict(X))  # [10,10,10,10,20,20,20,15,15,15,15]
+
+from sklearn.tree import DecisionTreeRegressor
+reg_sk = DecisionTreeRegressor(criterion="squared_error", random_state=0).fit(X,y)
+print(reg_sk.predict(X))       # [10,10,10,10,20,20,20,15,15,15,15]
+
+wine = load_wine()
+X = pd.DataFrame(wine.data, columns=wine.feature_names)
+y = pd.Series(wine.target)  # class labels 0,1,2
+print(X.shape, "classes:", set(y))
+display(X.head(5))
+print(y.value_counts())
+
+df = pd.DataFrame(wine.data, columns=wine.feature_names)
+df['target'] = wine.target
+df.corr()
+
+plt.figure(figsize=(12, 10))  # Adjust width and height as needed
+sns.heatmap(df.corr(), cmap="coolwarm", vmin=-1, vmax=1, annot=True)
+plt.show()
+
+# Split the data for training and testing
+X_train, X_test, y_train, y_test = train_test_split(
+    wine.data, wine.target, test_size=0.2, stratify=wine.target, random_state=42)
+print(X_train.shape, X_test.shape)
+
+# ---- Hyperparameter Tuning ----
+# Here, we set up a grid search that includes 'None' for max_depth.
+# In scikit-learn, max_depth=None means there is no limit to the depth of the tree.
+# The grid search will try both limited depths (3, 4, 5) and an unlimited tree.
+# For the Wine dataset, the grid search selects max_depth=None, which means the fully grown tree
+# provides the best cross-validation macro F1 score.
+param_grid = {
+    'criterion': ['gini', 'entropy'],
+    'max_depth': [None, 3, 4, 5],       # None means no maximum depth
+    'min_samples_split': [2, 5, 10]
+}
+tree = DecisionTreeClassifier(random_state=0)
+grid_search = GridSearchCV(tree, param_grid, cv=5, scoring='f1_macro')
+grid_search.fit(X_train, y_train)
+print("Best params:", grid_search.best_params_)
+
+
+best_tree = grid_search.best_estimator_  # this is already fit on the full training set after CV
+# Or explicitly:
+# best_tree = DecisionTreeClassifier(**grid_search.best_params_, random_state=0).fit(X_train, y_train)
+
+print("Feature importances:", best_tree.feature_importances_)
+
+y_pred = best_tree.predict(X_test)
+acc = accuracy_score(y_test, y_pred)
+print("Test Accuracy:", acc)
+print("\nClassification Report:\n", classification_report(y_test, y_pred, target_names=wine.target_names))
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+
+# ---- Model Comparison ----
+# Notice that our "baseline" model is defined as the default DecisionTreeClassifier,
+# which uses max_depth=None, criterion='gini', and min_samples_split=2 by default.
+# Thus, the tuned model and baseline model are identical, leading to the same performance.
+baseline_model = DecisionTreeClassifier(random_state=0)  # default (unpruned)
+tuned_model = DecisionTreeClassifier(criterion='gini', max_depth=None, min_samples_split=2, random_state=0)
+
+# Perform repeated Stratified 5-fold cross-validation to compare models
+n_repeats = 5
+kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+baseline_f1 = []
+tuned_f1 = []
+for r in range(n_repeats):
+    for train_idx, test_idx in kf.split(wine.data, wine.target):
+        X_tr, X_ts = wine.data[train_idx], wine.data[test_idx]
+        y_tr, y_ts = wine.target[train_idx], wine.target[test_idx]
+        baseline_model.fit(X_tr, y_tr)
+        tuned_model.fit(X_tr, y_tr)
+        # Compute macro-F1 on the test fold
+        f1_base = f1_score(y_ts, baseline_model.predict(X_ts), average='macro')
+        f1_tuned = f1_score(y_ts, tuned_model.predict(X_ts), average='macro')
+        baseline_f1.append(f1_base)
+        tuned_f1.append(f1_tuned)
+baseline_f1 = np.array(baseline_f1)
+tuned_f1 = np.array(tuned_f1)
+print("Baseline mean F1:", baseline_f1.mean())
+print("Tuned mean F1:", tuned_f1.mean())
+# The F1 scores are exactly the same because both models are identical.
+# This result emphasizes that, for this dataset, the default model is already optimal.
+# If you want to demonstrate differences, consider removing 'None' from the grid search,
+# or using a more complex/noisy dataset where a depth limit helps improve generalization.
+
+# Assume 'wine' dataset is already loaded and X_train, y_train are defined.
+# For this example, we use the full wine dataset (wine.data and wine.target).
+
+# Define the baseline model (default parameters: criterion='gini', max_depth=None, min_samples_split=2)
+baseline_model = DecisionTreeClassifier(random_state=0)
+
+# Define a tuned model with a limited max_depth (here we set max_depth=3)
+tuned_model = DecisionTreeClassifier(criterion='gini', max_depth=3, min_samples_split=2, random_state=0)
+
+# Perform repeated Stratified 5-fold cross-validation
+n_repeats = 5
+kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+baseline_f1 = []
+tuned_f1 = []
+
+for r in range(n_repeats):
+    for train_idx, test_idx in kf.split(wine.data, wine.target):
+        X_tr, X_ts = wine.data[train_idx], wine.data[test_idx]
+        y_tr, y_ts = wine.target[train_idx], wine.target[test_idx]
+        baseline_model.fit(X_tr, y_tr)
+        tuned_model.fit(X_tr, y_tr)
+        # Compute macro F1 score for the test fold
+        f1_base = f1_score(y_ts, baseline_model.predict(X_ts), average='macro')
+        f1_tuned = f1_score(y_ts, tuned_model.predict(X_ts), average='macro')
+        baseline_f1.append(f1_base)
+        tuned_f1.append(f1_tuned)
+
+baseline_f1 = np.array(baseline_f1)
+tuned_f1 = np.array(tuned_f1)
+
+print("Baseline (max_depth=None) mean F1:", baseline_f1.mean())
+print("Tuned (max_depth=3) mean F1:", tuned_f1.mean())
+
+from scipy.stats import ttest_rel
+t_stat, p_val = ttest_rel(tuned_f1, baseline_f1)
+print("Paired t-test p-value:", p_val)
+
+
